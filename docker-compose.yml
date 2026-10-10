@@ -1,0 +1,51 @@
+services:
+
+  # ── PostgreSQL database ──────────────────────────────────────────────
+  hapi-fhir-postgres:
+    image: postgres:15
+    container_name: hapi-fhir-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: hapi
+      POSTGRES_USER: hapi
+      POSTGRES_PASSWORD: hapi_password
+    volumes:
+      - hapi-postgres-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - hapi-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hapi -d hapi"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── HAPI FHIR server ─────────────────────────────────────────────────
+  hapi-fhir:
+    image: hapiproject/hapi:v7.4.0
+    container_name: hapi-fhir-server
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    depends_on:
+      hapi-fhir-postgres:
+        condition: service_healthy
+    environment:
+      spring.datasource.url: jdbc:postgresql://hapi-fhir-postgres:5432/hapi
+      spring.datasource.username: hapi
+      spring.datasource.password: hapi_password
+      spring.datasource.driverClassName: org.postgresql.Driver
+      spring.jpa.properties.hibernate.dialect: ca.uhn.fhir.jpa.model.dialect.HapiFhirPostgresDialect
+      hapi.fhir.fhir_version: R4
+    networks:
+      - hapi-net
+
+# ── Named volume (persists across restarts) ──────────────────────────
+volumes:
+  hapi-postgres-data:
+
+# ── Internal bridge network ──────────────────────────────────────────
+networks:
+  hapi-net:
+    driver: bridge
